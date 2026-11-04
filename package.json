@@ -1,0 +1,24 @@
+{
+  "name": "dsh-liquid-glass",
+  "version": "1.2.0",
+  "description": "DeepSeek Harness 全局玻璃主题：纯白与流光配色、清透与磨砂材质、左右圆角侧栏。",
+  "type": "module",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/Jeatricy/DSH_Liquid_Glass.git" },
+  "homepage": "https://github.com/Jeatricy/DSH_Liquid_Glass#readme",
+  "bugs": { "url": "https://github.com/Jeatricy/DSH_Liquid_Glass/issues" },
+  "engines": { "node": ">=22", "dsh": "0.2.1-rc.5" },
+  "exports": { ".": "./index.js", "./client": "./dist/client.js", "./icon": "./icon.svg", "./package.json": "./package.json" },
+  "files": ["index.js", "dist/client.js", "cordis.patch.yml", "icon.svg", "README.md", "LICENSE"],
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-client-ui-theme", "@deepseek-ai/dsh-client-ui-settings-general", "@deepseek-ai/dsh-client-ui-sidebar", "@deepseek-ai/dsh-client-ui-layout"]
+    }
+  },
+  "scripts": { "build": "node scripts/build.mjs", "test": "node --test test/*.test.js", "test:browser": "node test/browser.mjs", "pack": "node scripts/pack.mjs" },
+  "devDependencies": { "jsdom": "27.4.0", "playwright": "1.58.2", "react": "19.2.0", "react-dom": "19.2.0" }
+}
