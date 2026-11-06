@@ -1,10 +1,10 @@
-import { PLUGIN_ID } from './preferences.js';
+import { FLOW_DURATIONS, PLUGIN_ID, WALLPAPER_DIRECTIONS } from './preferences.js';
 import { buildAdapterCss } from './adapters.js';
 
 export function mountTheme({ document, window, theme, store, css, tokens, controlsCss }) {
   const body = document.body;
-  const attributes = ['data-dsh-liquid-glass', 'data-lg-palette', 'data-lg-material'];
-  const properties = ['--lg-opacity', '--lg-blur-size'];
+  const attributes = ['data-dsh-liquid-glass', 'data-lg-palette', 'data-lg-material', 'data-lg-flow'];
+  const properties = ['--lg-opacity', '--lg-blur-size', '--lg-flow-duration', '--lg-static-angle'];
   const previousAttributes = new Map(attributes.map(name => [name, body.getAttribute(name)]));
   const previousProperties = new Map(properties.map(name => [name, [body.style.getPropertyValue(name), body.style.getPropertyPriority(name)]]));
   function makeStyle(name, text) {
@@ -55,6 +55,19 @@ export function mountTheme({ document, window, theme, store, css, tokens, contro
     body.setAttribute('data-lg-material', state.material);
     body.style.setProperty('--lg-opacity', String(state.opacity / 100));
     body.style.setProperty('--lg-blur-size', `${state.blur}px`);
+    if (state.palette === 'white') {
+      body.style.removeProperty('--lg-static-angle');
+    } else {
+      const { angle } = WALLPAPER_DIRECTIONS[state.staticDirection];
+      body.style.setProperty('--lg-static-angle', `${angle}deg`);
+    }
+    if (state.flow[state.palette]) {
+      body.setAttribute('data-lg-flow', state.flowDirection);
+      body.style.setProperty('--lg-flow-duration', `${FLOW_DURATIONS[state.flowSpeed - 1]}s`);
+    } else {
+      body.removeAttribute('data-lg-flow');
+      body.style.removeProperty('--lg-flow-duration');
+    }
     if (!releaseTokens) releaseTokens = theme.overrideTokens(PLUGIN_ID, tokens);
   }
   const unsubscribe = store.subscribe(sync);

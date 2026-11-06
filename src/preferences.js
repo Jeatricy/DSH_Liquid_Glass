@@ -1,17 +1,43 @@
 export const PLUGIN_ID = 'dsh-liquid-glass';
 export const STORAGE_KEY = 'dsh-liquid-glass.preferences.v1';
-export const DEFAULTS = Object.freeze({ enabled: true, palette: 'aurora', material: 'clear', opacity: 55, blur: 30 });
+export const FLOW_DURATIONS = Object.freeze([48, 36, 24, 16, 8]);
+export const WALLPAPER_DIRECTIONS = Object.freeze({
+  left: { label: '← 向左', angle: 270 },
+  right: { label: '→ 向右', angle: 90 },
+  up: { label: '↑ 向上', angle: 0 },
+  down: { label: '↓ 向下', angle: 180 },
+  'up-left': { label: '↖ 向左上', angle: 315 },
+  'up-right': { label: '↗ 向右上', angle: 45 },
+  'down-left': { label: '↙ 向左下', angle: 225 },
+  'down-right': { label: '↘ 向右下', angle: 135 },
+});
+const DEFAULT_FLOW = Object.freeze({ aurora: false, glacier: false, rose: false, rgb: true });
+export const DEFAULTS = Object.freeze({
+  enabled: true, palette: 'aurora', material: 'clear', opacity: 55, blur: 30,
+  flow: DEFAULT_FLOW, flowDirection: 'down-right', flowSpeed: 3, staticDirection: 'down-right',
+});
 
 export function normalizePreferences(value) {
   const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   const number = (key, min, max) => typeof source[key] === 'number' && Number.isFinite(source[key])
     ? Math.max(min, Math.min(max, Math.round(source[key]))) : DEFAULTS[key];
+  const direction = key => typeof source[key] === 'string' && Object.hasOwn(WALLPAPER_DIRECTIONS, source[key])
+    ? source[key] : DEFAULTS[key];
+  const flow = Object.fromEntries(Object.entries(DEFAULT_FLOW).map(([palette, defaultEnabled]) => {
+    const enabled = source.flow?.[palette];
+    return [palette, typeof enabled === 'boolean' ? enabled : defaultEnabled];
+  }));
   return Object.freeze({
     enabled: typeof source.enabled === 'boolean' ? source.enabled : DEFAULTS.enabled,
-    palette: ['aurora', 'glacier', 'rose', 'white'].includes(source.palette) ? source.palette : DEFAULTS.palette,
+    palette: typeof source.palette === 'string' && (source.palette === 'white' || Object.hasOwn(DEFAULT_FLOW, source.palette))
+      ? source.palette : DEFAULTS.palette,
     material: ['clear', 'frosted'].includes(source.material) ? source.material : DEFAULTS.material,
     opacity: number('opacity', 35, 90),
     blur: number('blur', 12, 42),
+    flow: Object.freeze(flow),
+    flowDirection: direction('flowDirection'),
+    flowSpeed: number('flowSpeed', 1, FLOW_DURATIONS.length),
+    staticDirection: direction('staticDirection'),
   });
 }
 

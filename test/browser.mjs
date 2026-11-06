@@ -1,4 +1,4 @@
-// Offline regression fixture using official rc.5 module styles and shared React.
+// Offline regression fixture using official DSH module styles and shared React.
 // This does not claim to be the authenticated desktop GUI; live checks are separate.
 import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
@@ -18,6 +18,7 @@ const definitions = await Promise.all([
   ['react-dom/client', resolve(domRoot, 'cjs/react-dom-client.development.js')],
 ].map(async ([name, path]) => [name, await readFile(path, 'utf8')]));
 const sdkRoot = process.env.DSH_SDK_REFERENCE_DIR || '.cache/dsh/node_modules/@deepseek-ai';
+const { version: sdkVersion } = JSON.parse(await readFile(`${sdkRoot}/dsh-client-ui-theme/package.json`, 'utf8'));
 const sdkStyles = [];
 for (const name of ['theme', 'layout', 'sidebar', 'sidebar-right', 'conversation', 'chat', 'settings-general', 'workspace']) {
   const source = await readFile(`${sdkRoot}/dsh-client-ui-${name}/lib/client.js`, 'utf8');
@@ -32,7 +33,7 @@ const bundle = await readFile('dist/client.js', 'utf8');
 const executablePath = [process.env.DSH_TEST_BROWSER, 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(path => path && existsSync(path));
 const browser = await chromium.launch({ executablePath, headless: true });
 await mkdir('artifacts', { recursive: true });
-const report = { kind: 'offline-browser-regression', officialSdk: '0.2.1-rc.5', results: [] };
+const report = { kind: 'offline-browser-regression', officialSdk: sdkVersion, results: [] };
 try {
   for (const [name, width, height, dark, reduced] of [['light', 1360, 900, false, false], ['dark', 1360, 900, true, false], ['mobile', 390, 844, false, false], ['reduced', 1100, 840, false, true]]) {
     const page = await browser.newPage({ viewport: { width, height }, colorScheme: dark ? 'dark' : 'light', reducedMotion: reduced ? 'reduce' : 'no-preference' });
@@ -140,7 +141,11 @@ try {
     await dialog.waitFor();
     const bounds = await dialog.boundingBox();
     assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width && bounds.height <= height);
-    await dialog.getByRole('button', { name: /纯白/ }).click();
+    const swatches = await dialog.locator('.dsh-lg-swatch').evaluateAll(items =>
+      items.map(item => getComputedStyle(item).backgroundImage));
+    assert.equal(swatches.length, 5);
+    assert.ok(swatches.every(image => image.startsWith('linear-gradient(135deg,')));
+    await dialog.getByRole('button', { name: /雪瓷/ }).click();
     assert.equal(await page.locator('body').getAttribute('data-lg-palette'), 'white');
     if (!dark) assert.match(await page.locator('body').evaluate(el => getComputedStyle(el).backgroundImage), /rgb\(255, 255, 255\)/);
     await dialog.getByRole('button', { name: /柔雾磨砂/ }).click();
@@ -158,13 +163,97 @@ try {
       await page.screenshot({ path: 'artifacts/preview-white.png', fullPage: true });
       await page.getByRole('button', { name: '液态玻璃外观', exact: true }).click();
     }
-    await dialog.getByRole('button', { name: /冰川/ }).click();
-    assert.equal(await page.locator('body').getAttribute('data-lg-palette'), 'glacier');
+    const rgb = dialog.getByRole('button', { name: /虹波/ });
+    const flow = dialog.getByRole('switch', { name: '背景流动' });
+    const direction = dialog.getByRole('combobox', { name: '流动方向' });
+    const staticDirection = dialog.getByRole('combobox', { name: '静态渐变方向' });
+    const speed = dialog.getByRole('slider', { name: /流动速度/ });
+    const body = page.locator('body');
+    const inspectWallpaper = () => body.evaluate(body => {
+      const style = getComputedStyle(body);
+      const animation = body.getAnimations().find(item => item.animationName === 'dsh-lg-flow');
+      if (!animation) return { image: style.backgroundImage, duration: null, position: null };
+      animation.pause();
+      const duration = animation.effect.getTiming().duration;
+      animation.currentTime = duration / 4;
+      const position = style.backgroundPosition.split(', ')[1].split(' ').map(Number.parseFloat);
+      return { image: style.backgroundImage, duration, position };
+    });
+    await rgb.click();
+    assert.equal(await rgb.getAttribute('aria-pressed'), 'true');
+    assert.equal(await flow.getAttribute('aria-checked'), 'true');
+    assert.equal(await direction.inputValue(), 'down-right');
+    assert.equal(await speed.inputValue(), '3');
+    const wallpaper = await inspectWallpaper();
+    assert.match(wallpaper.image, /repeating-linear-gradient\(135deg,/);
+    assert.ok(wallpaper.image.includes(dark ? 'rgb(119, 54, 79)' : 'rgb(255, 165, 186)'));
+    assert.equal(wallpaper.duration, reduced ? null : 24000);
+    assert.deepEqual(wallpaper.position, reduced ? null : [75, 75]);
+    await speed.focus(); await page.keyboard.press('End');
+    assert.equal(await speed.inputValue(), '5');
+    for (const [movement, angle, position] of [
+      ['left', 90, [25, 0]], ['up-left', 135, [25, 25]],
+      ['down-left', 45, [25, 75]], ['up-right', 45, [75, 25]],
+    ]) {
+      await direction.selectOption(movement);
+      assert.equal(await body.getAttribute('data-lg-flow'), movement);
+      const result = await inspectWallpaper();
+      assert.ok(result.image.includes(`repeating-linear-gradient(${reduced ? 135 : angle}deg,`));
+      assert.equal(result.duration, reduced ? null : 8000);
+      assert.deepEqual(result.position, reduced ? null : position);
+    }
+    for (const [palette, label, movement, position, lightColor, darkColor] of [
+      ['aurora', '极光', 'right', [75, 0], 'rgb(255, 154, 158)', 'rgb(68, 49, 73)'],
+      ['glacier', '冰湖', 'up', [0, 25], 'rgb(183, 202, 249)', 'rgb(34, 47, 85)'],
+      ['rose', '绯霞', 'down', [0, 75], 'rgb(247, 180, 194)', 'rgb(84, 45, 71)'],
+    ]) {
+      await dialog.getByRole('button', { name: new RegExp(label) }).click();
+      assert.equal(await body.getAttribute('data-lg-palette'), palette);
+      assert.equal(await flow.getAttribute('aria-checked'), 'false');
+      assert.equal((await inspectWallpaper()).duration, null);
+      assert.equal(await staticDirection.inputValue(), 'down-right');
+      assert.equal(await staticDirection.locator('option').count(), 8);
+      await flow.click();
+      await direction.selectOption(movement);
+      assert.equal(await body.getAttribute('data-lg-flow'), movement);
+      const result = await inspectWallpaper();
+      assert.ok(result.image.includes(dark ? darkColor : lightColor));
+      assert.equal(result.duration, reduced ? null : 8000);
+      assert.deepEqual(result.position, reduced ? null : position);
+    }
+    await dialog.getByRole('button', { name: /雪瓷/ }).click();
+    assert.equal(await flow.count(), 0);
+    assert.equal(await staticDirection.count(), 0);
+    assert.equal(await body.getAttribute('data-lg-flow'), null);
+    assert.equal((await inspectWallpaper()).duration, null);
+    await dialog.getByRole('button', { name: /绯霞/ }).click();
+    assert.equal(await flow.getAttribute('aria-checked'), 'true');
+    assert.equal(await direction.inputValue(), 'down');
+    await flow.click();
+    await staticDirection.selectOption('up-left');
+    let staticWallpaper = await inspectWallpaper();
+    assert.equal(staticWallpaper.duration, null);
+    assert.match(staticWallpaper.image, /, linear-gradient\(315deg,/);
+    await flow.click();
+    assert.equal(await direction.inputValue(), 'down');
+    if (reduced) assert.match((await inspectWallpaper()).image, /, linear-gradient\(315deg,/);
+    await flow.click();
+    await rgb.click();
+    assert.equal(await flow.getAttribute('aria-checked'), 'true');
+    await flow.click();
+    assert.equal(await staticDirection.inputValue(), 'up-left');
+    await staticDirection.selectOption('down-left');
+    staticWallpaper = await inspectWallpaper();
+    assert.equal(staticWallpaper.duration, null);
+    assert.match(staticWallpaper.image, /repeating-linear-gradient\(225deg,/);
+    await flow.click();
+    assert.equal(await direction.inputValue(), 'down');
     const slider = dialog.getByRole('slider', { name: /玻璃厚度/ });
     await slider.focus(); await page.keyboard.press('ArrowRight');
     assert.equal(await slider.inputValue(), '56');
     await dialog.getByRole('switch', { name: '启用液态玻璃主题' }).click();
     assert.equal(await page.locator('body').getAttribute('data-dsh-liquid-glass'), null);
+    assert.equal((await inspectWallpaper()).duration, null);
     await dialog.getByRole('switch', { name: '启用液态玻璃主题' }).click();
     await dialog.getByRole('button', { name: '恢复默认', exact: true }).click();
     await page.screenshot({ path: `artifacts/controls-${name}.png`, fullPage: true });
@@ -177,7 +266,7 @@ try {
     assert.equal(await page.locator('body').getAttribute('data-dsh-liquid-glass'), null);
     assert.equal(await page.evaluate(() => document.body.hasAttribute('data-ds-dark-theme')), dark);
     assert.deepEqual(errors, []);
-    report.results.push({ name, viewport: { width, height }, passed: true, material, docking, removedControlsAbsent: true, outerFrameRemoved: true, inputWorks: true, dialogFits: true, keyboardWorks: true, disabledRestoresNative: true, disposedCleanly: true, errors });
+    report.results.push({ name, viewport: { width, height }, passed: true, material, docking, flowMotion: reduced ? 'static' : 'eight directions', staticDirection: true, removedControlsAbsent: true, outerFrameRemoved: true, inputWorks: true, dialogFits: true, keyboardWorks: true, disabledRestoresNative: true, disposedCleanly: true, errors });
     await page.close();
   }
   await writeFile('artifacts/browser-report.json', JSON.stringify(report, null, 2));

@@ -6,7 +6,7 @@ import { JSDOM } from 'jsdom';
 import * as React from 'react';
 import { buildAdapterCss, resolveModuleClass } from '../src/adapters.js';
 import { createClientPlugin } from '../src/client.js';
-import { createPreferenceStore, PLUGIN_ID, STORAGE_KEY } from '../src/preferences.js';
+import { createPreferenceStore, DEFAULTS, PLUGIN_ID, STORAGE_KEY } from '../src/preferences.js';
 import { mountTheme } from '../src/runtime.js';
 import { compileTheme } from '../scripts/build.mjs';
 
@@ -127,10 +127,10 @@ function bodyState(body) {
 }
 
 function assertNoAppearance(body) {
-  for (const name of ['data-dsh-liquid-glass', 'data-lg-palette', 'data-lg-material']) {
+  for (const name of ['data-dsh-liquid-glass', 'data-lg-palette', 'data-lg-material', 'data-lg-flow']) {
     assert.equal(body.hasAttribute(name), false, `${name} should be released`);
   }
-  for (const name of ['--lg-opacity', '--lg-blur-size']) {
+  for (const name of ['--lg-opacity', '--lg-blur-size', '--lg-flow-duration', '--lg-static-angle']) {
     assert.equal(body.style.getPropertyValue(name), '', `${name} should be released`);
     assert.equal(body.style.getPropertyPriority(name), '', `${name} priority should be released`);
   }
@@ -311,8 +311,11 @@ test('restoration preserves pre-existing owned attributes, inline values and !im
   body.setAttribute('data-dsh-liquid-glass', 'previous-owner');
   body.setAttribute('data-lg-palette', 'previous-palette');
   body.setAttribute('data-lg-material', 'previous-material');
+  body.setAttribute('data-lg-flow', 'previous-flow');
   body.style.setProperty('--lg-opacity', '.83', 'important');
   body.style.setProperty('--lg-blur-size', '15px', 'important');
+  body.style.setProperty('--lg-flow-duration', '11s', 'important');
+  body.style.setProperty('--lg-static-angle', '30deg', 'important');
   const baseline = bodyState(body);
   const { store, unmount, overrides } = runtime(t, window);
   assert.equal(body.getAttribute('data-lg-material'), 'clear');
@@ -324,10 +327,13 @@ test('restoration preserves pre-existing owned attributes, inline values and !im
   assert.deepEqual(bodyState(body), baseline);
   store.update({ material: 'frosted', blur: 42 });
   assert.deepEqual(bodyState(body), baseline, 'disabled changes must preserve the prior owner');
-  store.update({ enabled: true, palette: 'rose', opacity: 42 });
+  store.update({ enabled: true, palette: 'rgb', opacity: 42, flowDirection: 'down-left', flowSpeed: 5, staticDirection: 'up-right' });
   assert.equal(body.style.getPropertyValue('--lg-opacity'), '0.42');
   assert.equal(body.getAttribute('data-lg-material'), 'frosted');
   assert.equal(body.style.getPropertyValue('--lg-blur-size'), '42px');
+  assert.equal(body.getAttribute('data-lg-flow'), 'down-left');
+  assert.equal(body.style.getPropertyValue('--lg-flow-duration'), '8s');
+  assert.equal(body.style.getPropertyValue('--lg-static-angle'), '45deg');
   unmount();
   assert.deepEqual(bodyState(body), baseline);
   assert.equal(overrides.length, 2);
@@ -402,7 +408,7 @@ test('unmounting while disabled leaves no owned appearance state behind', t => {
 test('disabled legacy preferences ignore removed fields and do not acquire tokens until enabled', t => {
   const window = page(t);
   const legacy = { enabled: false, palette: 'glacier', opacity: 68, blur: 22, refraction: 24, solid: true };
-  const expected = { enabled: false, palette: 'glacier', material: 'clear', opacity: 68, blur: 22 };
+  const expected = { ...DEFAULTS, enabled: false, palette: 'glacier', opacity: 68, blur: 22 };
   const raw = JSON.stringify(legacy);
   window.localStorage.setItem(STORAGE_KEY, raw);
   const baseline = bodyState(window.document.body);

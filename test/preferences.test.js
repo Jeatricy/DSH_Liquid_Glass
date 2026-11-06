@@ -3,7 +3,10 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { createPreferenceStore, DEFAULTS, normalizePreferences, STORAGE_KEY } from '../src/preferences.js';
 
-const defaults = { enabled: true, palette: 'aurora', material: 'clear', opacity: 55, blur: 30 };
+const defaults = {
+  enabled: true, palette: 'aurora', material: 'clear', opacity: 55, blur: 30,
+  flow: { aurora: false, glacier: false, rose: false, rgb: true }, flowDirection: 'down-right', flowSpeed: 3, staticDirection: 'down-right',
+};
 
 function page(t, options = {}) {
   const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', {
@@ -37,6 +40,7 @@ test('preferences reject invalid types instead of coercing them into settings', 
   const invalid = {
     enabled: 'false', palette: 'ROSE', material: 'CLEAR', opacity: '80', blur: Infinity,
     ignored: 'do not persist this',
+    flow: { aurora: 'true', rgb: 'false', white: true }, flowDirection: 'diagonal', flowSpeed: '5', staticDirection: 'constructor',
   };
   assert.deepEqual(normalizePreferences(invalid), defaults);
   assert.equal(invalid.opacity, '80', 'normalization must not mutate caller data');
@@ -59,6 +63,9 @@ test('preferences keep valid choices and round and clamp slider values', () => {
     [{ opacity: 90, blur: 12 }, { ...defaults, opacity: 90, blur: 12 }],
     [{ enabled: false, palette: 'glacier' }, { ...defaults, enabled: false, palette: 'glacier' }],
     [{ palette: 'rose' }, { ...defaults, palette: 'rose' }],
+    [{ palette: 'rgb' }, { ...defaults, palette: 'rgb' }],
+    [{ flow: { aurora: true, rgb: false, white: true }, flowDirection: 'up', flowSpeed: 99 },
+      { ...defaults, flow: { ...defaults.flow, aurora: true, rgb: false }, flowDirection: 'up', flowSpeed: 5 }],
     [{ palette: 'white', material: 'frosted' }, { ...defaults, palette: 'white', material: 'frosted' }],
     [{ material: 'clear' }, { ...defaults, material: 'clear' }],
   ];
@@ -82,6 +89,8 @@ test('persisted malformed JSON, wrong shapes and invalid fields fall back safely
       { ...defaults, enabled: false, palette: 'rose', opacity: 90, blur: 13 }],
     ['{"palette":"white","material":"frosted"}',
       { ...defaults, palette: 'white', material: 'frosted' }],
+    ['{"palette":"rgb","flowDirection":"left","staticDirection":"default"}',
+      { ...defaults, palette: 'rgb', flowDirection: 'left' }],
   ];
   for (const [raw, expected] of cases) {
     window.localStorage.setItem(STORAGE_KEY, raw);
@@ -100,13 +109,13 @@ test('legacy storage ignores refraction and solid while preserving current choic
   assert.equal(STORAGE_KEY, 'dsh-liquid-glass.preferences.v1');
   const cases = [
     [{ enabled: true, palette: 'aurora', opacity: 35, blur: 12, refraction: 0, solid: false },
-      { enabled: true, palette: 'aurora', material: 'clear', opacity: 35, blur: 12 }],
+      { ...defaults, opacity: 35, blur: 12 }],
     [{ enabled: false, palette: 'glacier', opacity: 68, blur: 22, refraction: 24, solid: true },
-      { enabled: false, palette: 'glacier', material: 'clear', opacity: 68, blur: 22 }],
+      { ...defaults, enabled: false, palette: 'glacier', opacity: 68, blur: 22 }],
     [{ enabled: true, palette: 'rose', material: 'frosted', opacity: 90, blur: 42, refraction: 12, solid: true },
-      { enabled: true, palette: 'rose', material: 'frosted', opacity: 90, blur: 42 }],
+      { ...defaults, palette: 'rose', material: 'frosted', opacity: 90, blur: 42 }],
     [{ enabled: false, palette: 'white', material: 'clear', opacity: 79, blur: 19, refraction: '24', solid: 'true' },
-      { enabled: false, palette: 'white', material: 'clear', opacity: 79, blur: 19 }],
+      { ...defaults, enabled: false, palette: 'white', opacity: 79, blur: 19 }],
   ];
   for (const [legacy, expected] of cases) {
     const raw = JSON.stringify(legacy);
@@ -135,7 +144,7 @@ test('legacy storage ignores refraction and solid while preserving current choic
 
 test('updates containing only removed preferences clean legacy storage without changing the snapshot', t => {
   const window = page(t);
-  const expected = { enabled: false, palette: 'white', material: 'frosted', opacity: 81, blur: 24 };
+  const expected = { ...defaults, enabled: false, palette: 'white', material: 'frosted', opacity: 81, blur: 24 };
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...expected, refraction: 24, solid: true }));
   const store = storeFor(t, window);
   const before = store.getSnapshot();
@@ -161,7 +170,7 @@ test('updates persist the complete normalized state and survive a new store', t 
   store.subscribe(() => observed.push(store.getSnapshot()));
 
   store.update({ enabled: true, opacity: 73.7, material: 'frosted', ignored: 'discard' });
-  const expected = { enabled: true, palette: 'rose', material: 'frosted', opacity: 74, blur: 18 };
+  const expected = { ...defaults, palette: 'rose', material: 'frosted', opacity: 74, blur: 18 };
   assert.deepEqual(store.getSnapshot(), expected);
   assert.deepEqual(JSON.parse(window.localStorage.getItem(STORAGE_KEY)), expected);
   assert.deepEqual(observed, [expected]);
@@ -169,6 +178,9 @@ test('updates persist the complete normalized state and survive a new store', t 
   assert.ok(Object.isFrozen(store.getSnapshot()));
   const reopened = storeFor(t, window);
   assert.deepEqual(reopened.getSnapshot(), expected);
+  const motion = { flow: { ...defaults.flow, rose: true }, flowDirection: 'down-right', flowSpeed: 4, staticDirection: 'up-right' };
+  reopened.update({ palette: 'rgb', ...motion });
+  assert.deepEqual(storeFor(t, window).getSnapshot(), { ...expected, palette: 'rgb', ...motion });
 });
 
 test('invalid material updates reset only that setting', t => {
@@ -277,7 +289,7 @@ test('same-origin windows synchronize through real storage events in both direct
   second.update({ enabled: true, blur: 41, material: 'clear' });
   await delivered;
   assert.deepEqual(first.getSnapshot(), {
-    enabled: true, palette: 'glacier', material: 'clear', opacity: 67, blur: 41,
+    ...defaults, palette: 'glacier', opacity: 67, blur: 41,
   });
   assert.deepEqual(second.getSnapshot(), first.getSnapshot());
   assert.equal(firstCalls, 2);
@@ -287,7 +299,7 @@ test('same-origin windows synchronize through real storage events in both direct
   first.update({ palette: 'white' });
   await delivered;
   assert.deepEqual(second.getSnapshot(), {
-    enabled: true, palette: 'white', material: 'clear', opacity: 67, blur: 41,
+    ...defaults, palette: 'white', opacity: 67, blur: 41,
   });
   assert.deepEqual(first.getSnapshot(), second.getSnapshot());
   assert.equal(firstCalls, 3);
@@ -300,7 +312,7 @@ test('real cross-window legacy writes ignore removed fields and the next save dr
   window.document.body.appendChild(frame);
   const otherWindow = frame.contentWindow;
   const store = storeFor(t, otherWindow);
-  const expected = { enabled: false, palette: 'rose', material: 'frosted', opacity: 73, blur: 21 };
+  const expected = { ...defaults, enabled: false, palette: 'rose', material: 'frosted', opacity: 73, blur: 21 };
   const observed = [];
   store.subscribe(() => observed.push(store.getSnapshot()));
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 
-// Exercise actual rc.5 DockKit CSS, including its carrier's inline geometry.
+// Exercise the installed SDK's DockKit CSS, including its carrier's inline geometry.
 // These fixtures never call DSH APIs or create real terminal/browser sessions.
 export async function exerciseDocking(page, sdkRoot, name) {
   const directory = `${sdkRoot}/dsh-web-frontend/dist/assets`;

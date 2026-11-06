@@ -1,13 +1,13 @@
 {
   "name": "dsh-liquid-glass",
-  "version": "1.2.0",
-  "description": "DeepSeek Harness 全局玻璃主题：纯白与流光配色、清透与磨砂材质、左右圆角侧栏。",
+  "version": "1.5.1",
+  "description": "DeepSeek Harness 全局玻璃主题：静态配色与 RGB 流动背景、清透与磨砂材质、左右圆角侧栏。",
   "type": "module",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/Jeatricy/DSH_Liquid_Glass.git" },
   "homepage": "https://github.com/Jeatricy/DSH_Liquid_Glass#readme",
   "bugs": { "url": "https://github.com/Jeatricy/DSH_Liquid_Glass/issues" },
-  "engines": { "node": ">=22", "dsh": "0.2.1-rc.5" },
+  "engines": { "node": ">=22", "dsh": "0.2.1-rc.5 || 0.2.2-rc.1" },
   "exports": { ".": "./index.js", "./client": "./dist/client.js", "./icon": "./icon.svg", "./package.json": "./package.json" },
   "files": ["index.js", "dist/client.js", "cordis.patch.yml", "icon.svg", "README.md", "LICENSE"],
   "dsh": {
