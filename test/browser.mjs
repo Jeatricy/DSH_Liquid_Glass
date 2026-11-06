@@ -1,7 +1,7 @@
 // Offline regression fixture using official DSH module styles and shared React.
 // This does not claim to be the authenticated desktop GUI; live checks are separate.
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
@@ -19,7 +19,14 @@ const definitions = await Promise.all([
 ].map(async ([name, path]) => [name, await readFile(path, 'utf8')]));
 const sdkRoot = process.env.DSH_SDK_REFERENCE_DIR || '.cache/dsh/node_modules/@deepseek-ai';
 const { version: sdkVersion } = JSON.parse(await readFile(`${sdkRoot}/dsh-client-ui-theme/package.json`, 'utf8'));
+const frontendAssets = `${sdkRoot}/dsh-web-frontend/dist/assets`;
+const frontendStylesheet = (await readdir(frontendAssets)).find(file => /^index-.*\.css$/.test(file));
+const frontendCss = await readFile(`${frontendAssets}/${frontendStylesheet}`, 'utf8');
+const nativeSwitch = frontendCss.match(/\.(_switch_\w+_\d+)\{/)[1];
+const nativeThumb = frontendCss.match(new RegExp(`\\.${nativeSwitch}\\[aria-checked=false\\] \\.([\\w-]+)\\{`))[1];
+const switchCss = frontendCss.match(new RegExp(`\\.(?:${nativeSwitch}|${nativeThumb})[^{}]*\\{[^{}]*\\}`, 'g')).join('\n');
 const sdkStyles = [];
+sdkStyles.push({ id: 'native-switch', css: switchCss });
 for (const name of ['theme', 'layout', 'sidebar', 'sidebar-right', 'conversation', 'chat', 'settings-general', 'workspace']) {
   const source = await readFile(`${sdkRoot}/dsh-client-ui-${name}/lib/client.js`, 'utf8');
   for (const match of source.matchAll(/const css(?:\$\d+)? = ("(?:[^"\\]|\\.)*");\s+const tagId(?:\$\d+)? = ("(?:[^"\\]|\\.)*");/g)) {
@@ -42,10 +49,17 @@ try {
     page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
     await page.route('https://liquid-glass.test/', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"></head><body></body></html>' }));
     await page.goto('https://liquid-glass.test/');
-    await page.evaluate(({ definitions, sdkStyles, dark }) => {
+    await page.evaluate(({ definitions, sdkStyles, dark, nativeSwitch, nativeThumb }) => {
       window.process = { env: { NODE_ENV: 'development' } };
       const modules = new Map(definitions), cache = new Map();
       window.sharedRequire = id => {
+        if (id === '@deepseek-ai/dsh-client-ui-primitives') return {
+          Switch({ checked, label, onChange }) {
+            const h = window.sharedRequire('react').createElement;
+            return h('button', { type: 'button', role: 'switch', 'aria-label': label, 'aria-checked': checked,
+              className: nativeSwitch, onClick: () => onChange(!checked) }, h('span', { className: nativeThumb }));
+          },
+        };
         if (cache.has(id)) return cache.get(id).exports;
         const module = { exports: {} }; cache.set(id, module);
         new Function('module', 'exports', 'require', modules.get(id))(module, module.exports, window.sharedRequire);
@@ -77,7 +91,7 @@ try {
         </div></main></div>`;
       window.__ModuleLoader__ = { load: descriptor => { window.plugin = descriptor.factory(window.sharedRequire); } };
       window.fixtureClass = cls;
-    }, { definitions, sdkStyles, dark });
+    }, { definitions, sdkStyles, dark, nativeSwitch, nativeThumb });
     await page.addStyleTag({ content: `html,body{margin:0;height:100%;font-family:system-ui,'Microsoft YaHei',sans-serif}*{box-sizing:border-box}button{font:inherit;cursor:pointer}.fixture-frame{grid-template-columns:252px minmax(0,1fr)}.fixture-brand{display:flex;gap:10px;align-items:center;font-size:16px;font-weight:650;padding:22px 10px 28px}.fixture-brand:first-letter{color:#087cf0}.fixture-nav{padding:10px 12px;font-size:13px;line-height:3;color:var(--dsw-alias-label-secondary)}.fixture-label{padding:18px 12px 10px;color:var(--dsw-alias-label-caption)}.fixture-selected{padding:12px;border:1px solid var(--lg-line);border-radius:12px;background:var(--dsw-specific-sidebar-nav-item-active);font-size:13px}.fixture-footer{margin-top:auto;padding:16px 0}.fixture-header{display:flex;justify-content:space-between;align-items:center;min-height:66px!important;padding:16px 26px!important;font-size:14px;font-weight:550}.fixture-chip{font-size:11px;border:1px solid var(--lg-line);border-radius:30px;padding:6px 12px;background:var(--lg-surface)}.fixture-chat{flex:1;overflow:auto;padding:30px max(28px,calc((100% - 760px) / 2));display:flex;flex-direction:column;gap:25px}.fixture-notice{color:var(--dsw-alias-label-caption);font-size:11px;text-align:center}.fixture-answer p{margin:0 0 12px;font-size:14px;line-height:1.85}.fixture-answer p:last-child{margin:14px 0 0}.fixture-code{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-markdown-code-block);border-radius:14px;overflow:hidden}.fixture-code [data-code-block-banner]{font-size:11px;padding:8px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--dsw-alias-border-l2)}.fixture-code button{background:transparent;border:0;color:var(--dsw-alias-label-tertiary);font-size:11px}.fixture-code pre{margin:0;padding:16px;font:12px/1.8 Consolas,monospace;overflow-x:auto}.fixture-tools{font-size:12px;color:var(--dsw-alias-label-tertiary)}.fixture-composer{padding:12px 28px 16px;max-width:816px;width:100%;margin:auto}.fixture-input{padding:16px 18px;min-height:75px;font-size:14px;outline:0}.fixture-input:empty:before{content:'有什么我可以帮你的？';color:var(--dsw-alias-label-caption);pointer-events:none}.fixture-composer-tools{display:flex;justify-content:space-between;align-items:center;padding:4px 12px 12px;color:var(--dsw-alias-label-secondary);font-size:12px}.fixture-send{background:#087cf0;color:white;width:32px;height:32px;border:0;border-radius:50%}.fixture-footnote{text-align:center;font-size:10px;margin-top:12px;color:var(--dsw-alias-label-caption)}@media(max-width:640px){.fixture-frame{grid-template-columns:minmax(0,1fr)}.fixture-sidebar{display:none}.fixture-chip{display:none}.fixture-header{padding:16px!important}.fixture-chat{padding:20px 16px;gap:18px}.fixture-composer{padding:10px 16px}.fixture-answer p{font-size:13px}#footer{position:fixed;top:12px;right:10px;z-index:9;display:block}}` });
     await page.addScriptTag({ content: bundle });
     await page.evaluate(dark => {
@@ -136,9 +150,18 @@ try {
     assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight), 'outer frame must fit the viewport');
     await page.screenshot({ path: `artifacts/preview-${name}.png`, fullPage: true });
     if (width < 640) await page.evaluate(() => document.body.append(document.getElementById('footer')));
-    await page.getByRole('button', { name: '液态玻璃外观', exact: true }).click();
+    const launcher = page.getByRole('button', { name: '液态玻璃外观', exact: true });
+    assert.equal(await launcher.innerText(), '');
+    assert.equal(await launcher.getAttribute('title'), '液态玻璃外观');
+    assert.equal(await launcher.locator('svg').count(), 1);
+    await launcher.click();
     const dialog = page.getByRole('dialog', { name: '外观调节', exact: true });
     await dialog.waitFor();
+    const switchShapes = await dialog.getByRole('switch').evaluateAll(items => items.map(button => {
+      const track = getComputedStyle(button), thumb = getComputedStyle(button.firstElementChild);
+      return [track.width, track.height, track.borderRadius, thumb.width, thumb.height, thumb.borderRadius];
+    }));
+    assert.deepEqual(switchShapes, Array.from({ length: 2 }, () => ['36px', '20px', '999px', '16px', '16px', '50%']));
     const bounds = await dialog.boundingBox();
     assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width && bounds.height <= height);
     const swatches = await dialog.locator('.dsh-lg-swatch').evaluateAll(items =>

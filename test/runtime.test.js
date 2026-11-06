@@ -651,7 +651,7 @@ test('the client effect releases both the runtime observer and storage listener 
   installBrowserGlobals(t, window);
   let uninstall;
   t.after(() => uninstall?.());
-  const plugin = createClientPlugin(React, assets);
+  const plugin = createClientPlugin(React, { Switch: 'button' }, assets);
   plugin.apply({
     theme,
     effect(setup) { uninstall = setup(); },

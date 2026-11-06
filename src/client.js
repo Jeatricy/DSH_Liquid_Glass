@@ -1,7 +1,7 @@
 import { createPreferenceStore, DEFAULTS, FLOW_DURATIONS, WALLPAPER_DIRECTIONS } from './preferences.js';
 import { mountTheme } from './runtime.js';
 
-export function createClientPlugin(React, assets) {
+export function createClientPlugin(React, { Switch }, assets) {
   const h = React.createElement;
   function Droplet({ size = 18 }) {
     return h('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': true },
@@ -33,8 +33,8 @@ export function createClientPlugin(React, assets) {
             h('div', { className: 'dsh-lg-identity' },
               h('span', { className: 'dsh-lg-icon' }, h(Droplet, { size: 22 })),
               h('div', null, h(compact ? 'h2' : 'h3', null, '液态玻璃'), h('p', null, 'Liquid Glass · 让光与色彩流入工作空间'))),
-            h('button', { type: 'button', className: 'dsh-lg-switch', role: 'switch', 'aria-checked': state.enabled,
-              'aria-label': '启用液态玻璃主题', onClick: () => store.update({ enabled: !state.enabled }) }, h('span'))),
+            h(Switch, { checked: state.enabled, label: '启用液态玻璃主题',
+              onChange: enabled => store.update({ enabled }) })),
           h('fieldset', { className: 'dsh-lg-options', disabled: !state.enabled },
             h('legend', { className: 'dsh-lg-sr-only' }, '玻璃外观'),
             h('div', { className: 'dsh-lg-palette-label', id: `${id}-materials` }, '玻璃材质'),
@@ -51,9 +51,9 @@ export function createClientPlugin(React, assets) {
                   h('span', { className: 'dsh-lg-palette-name' }, label), h('span', { className: 'dsh-lg-hint' }, subtitle)))),
             state.palette !== 'white' && h('div', { className: 'dsh-lg-flow' },
               h('div', { className: 'dsh-lg-flow-row' },
-                h('span', { id: `${id}-flow` }, '背景流动'),
-                h('button', { type: 'button', className: 'dsh-lg-switch', role: 'switch', 'aria-checked': flowing,
-                  'aria-labelledby': `${id}-flow`, onClick: () => store.update({ flow: { ...state.flow, [state.palette]: !flowing } }) }, h('span'))),
+                h('span', null, '背景流动'),
+                h(Switch, { checked: flowing, label: '背景流动',
+                  onChange: enabled => store.update({ flow: { ...state.flow, [state.palette]: enabled } }) })),
               h('div', { className: 'dsh-lg-flow-row' },
                 h('label', { htmlFor: `${id}-direction` }, flowing ? '流动方向' : '静态渐变方向'),
                 h('select', { id: `${id}-direction`, value: state[directionKey],
@@ -66,7 +66,7 @@ export function createClientPlugin(React, assets) {
           h('div', { className: 'dsh-lg-bottom' }, h('span', null, state.enabled ? '明暗随 DSH 外观设置切换' : '已恢复 DSH 原有外观'),
             h('button', { type: 'button', className: 'dsh-lg-reset', onClick: () => store.update(DEFAULTS) }, '恢复默认')));
       }
-      function QuickSettings({ wide = false }) {
+      function QuickSettings() {
         const dialog = React.useRef(null);
         const trigger = React.useRef(null);
         const title = React.useId();
@@ -75,7 +75,7 @@ export function createClientPlugin(React, assets) {
           h('button', { ref: trigger, type: 'button', className: 'dsh-lg-launcher', title: '液态玻璃外观',
             'aria-label': '液态玻璃外观', 'aria-haspopup': 'dialog',
             onClick: () => { if (!dialog.current.open) { dialog.current.showModal(); setOpen(true); } } },
-            h(Droplet), wide && h('span', null, '液态玻璃')),
+            h(Droplet)),
           h('dialog', { ref: dialog, className: 'dsh-lg-dialog', role: 'dialog', 'aria-modal': open ? 'true' : undefined, 'aria-labelledby': title,
             onClick: event => { if (event.target === dialog.current) { const rect = dialog.current.getBoundingClientRect();
               if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.current.close(); } },

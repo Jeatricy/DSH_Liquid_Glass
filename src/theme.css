@@ -242,7 +242,7 @@ body[data-dsh-liquid-glass] [role="dialog"] {
 }
 body[data-dsh-liquid-glass] [data-composer-dock] { color: var(--lg-secondary); }
 body[data-dsh-liquid-glass] [data-disclosure-header] { border-radius: 11px; }
-body[data-dsh-liquid-glass] :is(button, a, input, select, textarea):focus-visible {
+body[data-dsh-liquid-glass] :is(button, a, input, select, textarea):focus-visible:where(:not([role="switch"])) {
   outline: 2px solid var(--lg-accent);
   outline-offset: 3px;
 }

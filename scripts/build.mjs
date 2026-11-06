@@ -23,7 +23,7 @@ export async function build() {
   const sources = await Promise.all(['preferences', 'adapters', 'runtime', 'client'].map(name => readFile(`src/${name}.js`, 'utf8')));
   const code = sources.map(source => source.replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, '')).join('\n');
   const manifest = JSON.parse(await readFile('package.json', 'utf8'));
-  const bundle = `/* dsh-liquid-glass ${manifest.version} | MIT | uses DSH shared React */\nwindow.__ModuleLoader__.load({\n  id: 'dsh-liquid-glass',\n  factory(require) {\n'use strict';\n${code}\nreturn createClientPlugin(require('react'), ${JSON.stringify(assets)});\n  }\n});\n`;
+  const bundle = `/* dsh-liquid-glass ${manifest.version} | MIT | uses DSH shared React and UI primitives */\nwindow.__ModuleLoader__.load({\n  id: 'dsh-liquid-glass',\n  factory(require) {\n'use strict';\n${code}\nreturn createClientPlugin(require('react'), require('@deepseek-ai/dsh-client-ui-primitives'), ${JSON.stringify(assets)});\n  }\n});\n`;
   await mkdir('dist', { recursive: true });
   await writeFile('dist/client.js', bundle);
   console.log(`Built dist/client.js (${Buffer.byteLength(bundle)} bytes; ${Object.keys(assets.tokens).length} native theme tokens)`);
