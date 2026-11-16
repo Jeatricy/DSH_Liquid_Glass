@@ -27,13 +27,20 @@ const nativeThumb = frontendCss.match(new RegExp(`\\.${nativeSwitch}\\[aria-chec
 const switchCss = frontendCss.match(new RegExp(`\\.(?:${nativeSwitch}|${nativeThumb})[^{}]*\\{[^{}]*\\}`, 'g')).join('\n');
 const sdkStyles = [];
 sdkStyles.push({ id: 'native-switch', css: switchCss });
+// Official bundles ship readable in 0.2.1 and minified in 0.2.2 (template literals,
+// `css$N` / `tagId$N`, no spaces around `=`). Read either shape.
+const cssPair = /const css(?:\$\d+)?\s*=\s*(?:"((?:[^"\\]|\\.)*)"|`((?:[^`\\]|\\.)*)`);\s*const tagId(?:\$\d+)?\s*=\s*(?:"((?:[^"\\]|\\.)*)"|`([^`]*)`);/g;
+const quoted = raw => raw === undefined ? undefined : JSON.parse(`"${raw}"`);
+const template = raw => raw === undefined ? undefined : raw.replace(/\\`/g, '`').replace(/\\\$/g, '$');
 for (const name of ['theme', 'layout', 'sidebar', 'sidebar-right', 'conversation', 'chat', 'settings-general', 'workspace']) {
   const source = await readFile(`${sdkRoot}/dsh-client-ui-${name}/lib/client.js`, 'utf8');
-  for (const match of source.matchAll(/const css(?:\$\d+)? = ("(?:[^"\\]|\\.)*");\s+const tagId(?:\$\d+)? = ("(?:[^"\\]|\\.)*");/g)) {
-    sdkStyles.push({ id: JSON.parse(match[2]), css: JSON.parse(match[1]) });
+  for (const match of source.matchAll(cssPair)) {
+    sdkStyles.push({ id: quoted(match[3]) ?? template(match[4]), css: quoted(match[1]) ?? template(match[2]) });
   }
   if (name === 'theme') {
-    for (const match of source.matchAll(/var [\w$]+_css_default = ("(?:[^"\\]|\\.)*");/g)) sdkStyles.push({ id: `native-base-${sdkStyles.length}`, css: JSON.parse(match[1]) });
+    for (const match of source.matchAll(/var [\w$]+_css_default\s*=\s*(?:"((?:[^"\\]|\\.)*)"|`((?:[^`\\]|\\.)*)`);/g)) {
+      sdkStyles.push({ id: `native-base-${sdkStyles.length}`, css: quoted(match[1]) ?? template(match[2]) });
+    }
   }
 }
 const bundle = await readFile('dist/client.js', 'utf8');
@@ -75,12 +82,12 @@ try {
       document.body.toggleAttribute('data-ds-dark-theme', dark);
       document.body.innerHTML = `<div class="${cls('layout', 'AppFrame', 'frame')} fixture-frame">
         <aside class="${cls('layout', 'AppFrame', 'sidebarCol')} fixture-sidebar"><div style="width:252px" class="${cls('sidebar', 'SidebarRoot', 'root')}">
-          <div class="fixture-brand">◒ <span>DeepSeek Harness</span></div><button class="${cls('sidebar', 'SidebarRoot', 'newSession')}">＋ 新建对话</button>
+          <div class="fixture-brand">◒ <span>DeepSeek Harness</span></div><div class="${cls('sidebar', 'SidebarRoot', 'newSessionRow')}"><button class="${cls('sidebar', 'SidebarRoot', 'newSession')}">＋ 新建对话</button></div>
           <div class="fixture-nav">◷　计划任务<br>▧　工作区<br>◇　插件</div><small class="fixture-label">今天</small><div class="fixture-selected">液态玻璃主题设计</div><div class="fixture-nav">重构组件与样式<br>审查项目结构<br>整理开发计划</div><span data-test-fade class="${cls('workspace', 'WorkspaceBrowser', 'fade')}"></span><div class="fixture-footer" id="footer"></div></div></aside>
         <main class="${cls('layout', 'AppFrame', 'centerCol')}"><div class="${cls('conversation', 'ConversationRoot', 'root')}" data-phase="active">
           <header class="${cls('conversation', 'ConversationRoot', 'header')} fixture-header"><span>液态玻璃主题设计</span><span class="fixture-chip">DeepSeek · 编程助手</span></header>
           <div class="fixture-chat" data-conversation-scroll><div class="fixture-notice">组件预览 · 使用官方 DSH 样式 · 示例对话</div>
-            <div class="${cls('chat', 'MessageItem', 'userRow')}"><div class="${cls('chat', 'MessageItem', 'bubble')}">让整个工作空间，都拥有通透的液态玻璃质感。</div></div>
+            <div class="${cls('chat', 'MessageItem', 'userRow')}"><div class="${cls('chat', 'MessageItem', 'bubble')}" data-message-bubble>让整个工作空间，都拥有通透的液态玻璃质感。</div></div>
             <div class="${cls('chat', 'AssistantMarkdown', 'root')} fixture-answer"><p>让光与色彩，流入你的工作空间。</p><p>透过柔和的磨砂面板，背景呈现出淡淡的粉紫、青绿与湖蓝。文字依然清晰，所有常用操作都触手可及。</p><div class="fixture-code"><div data-code-block-banner>theme.js <button id="copy-code">复制</button></div><pre><span style="color:var(--shiki-token-keyword)">const</span> theme = {
   material: <span style="color:var(--shiki-token-string)">'liquid-glass'</span>,
   blur: <span style="color:var(--shiki-token-constant)">30</span>,
@@ -126,7 +133,17 @@ try {
     const material = await page.locator('[data-composer-card]').evaluate(el => ({ blur: getComputedStyle(el).backdropFilter, radius: getComputedStyle(el).borderRadius, background: getComputedStyle(el).backgroundColor }));
     assert.equal(material.blur, 'none');
     assert.equal(await page.locator('svg[data-lg-filter], [data-lg-lens]').count(), 0);
-    assert.equal(await page.locator('[data-test-fade]').evaluate(el => getComputedStyle(el).display), 'none');
+    // 0.2.1 paints the workspace fade mask through a CSS module; 0.2.2 dropped it,
+    // so the element only carries a class (and a rule to hide it) on the old SDK.
+    const fadeDisplay = await page.locator('[data-test-fade]').evaluate(el => el.className ? getComputedStyle(el).display : null);
+    assert.ok(fadeDisplay === null || fadeDisplay === 'none', 'workspace fade mask must stay hidden when DSH still renders one');
+    const bubble = await page.locator('[data-message-bubble]').evaluate(el => {
+      const s = getComputedStyle(el);
+      return { radius: s.borderTopLeftRadius, color: s.color, image: s.backgroundImage };
+    });
+    assert.equal(bubble.radius, '20px');
+    assert.ok(bubble.image.startsWith('linear-gradient(155deg') && bubble.image.includes('rgb(5, 114, 223)'), `bubble fill must keep the brand gradient, saw ${bubble.image}`);
+    assert.equal(bubble.color, 'rgb(255, 255, 255)');
     assert.equal(await page.locator('.fixture-sidebar').evaluate(el => getComputedStyle(el).borderRadius), '24px');
     if (width > 640) assert.ok(await page.locator('.fixture-sidebar').evaluate(el => {
       const frame = el.getBoundingClientRect(), button = el.querySelector('button').getBoundingClientRect();

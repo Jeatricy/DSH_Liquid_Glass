@@ -1,4 +1,4 @@
-/* dsh-liquid-glass 1.5.2 | MIT | uses DSH shared React and UI primitives */
+/* dsh-liquid-glass 1.6.0 | MIT | uses DSH shared React and UI primitives */
 window.__ModuleLoader__.load({
   id: 'dsh-liquid-glass',
   factory(require) {
@@ -97,7 +97,7 @@ const MODULES = [
   ['ui-conversation', 'ConversationRoot', ['root'], 'background: transparent;'],
   ['ui-conversation', 'ConversationRoot', ['header'], 'background: var(--lg-surface-soft); border-bottom-color: var(--lg-line); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);'],
   ['ui-conversation', 'ConversationRoot', ['composerSeat'], 'background: transparent;'],
-  ['ui-conversation', 'InputBar', ['primary'], 'background: #0572df; color: #fff; box-shadow: 0 3px 12px rgb(10 132 255 / .22);'],
+  ['ui-conversation', 'InputBar', ['primary'], 'background: var(--lg-accent); color: var(--dsw-alias-label-on-color, #fff); box-shadow: 0 3px 12px rgb(10 132 255 / .22);'],
   ['ui-conversation', 'ContextMeter', ['panel'], 'background: var(--lg-surface-strong); border: 1px solid var(--lg-line); border-radius: 18px; box-shadow: var(--lg-shadow); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);'],
   ['ui-chat', 'MessageItem', ['bubble'], 'background: linear-gradient(155deg, #0572df, #0863cc); color: #fff; border: 1px solid rgb(255 255 255 / .28); border-radius: 20px; box-shadow: 0 5px 16px rgb(0 100 215 / .16), inset 0 1px 0 rgb(255 255 255 / .23);'],
   ['ui-chat', 'AssistantMarkdown', ['root'], 'background: var(--lg-surface); border: 1px solid var(--lg-line); border-radius: 22px; padding: 16px 20px; box-shadow: var(--lg-small-shadow); min-width: 0; box-sizing: border-box;'],
@@ -109,12 +109,26 @@ const MODULES = [
   ['ui-sidebar-right', 'SidebarRight', ['panel', 'root'], 'background: transparent;'],
 ];
 
+// Hooks owned by the official primitives rather than by a CSS module, so they survive
+// rebuilds and hashed-name changes. DSH 0.2.2 moved the user message onto the shared
+// UserMessageBubble primitive, which forwards `data-message-bubble` to the element and
+// no longer renders the former `MessageItem.bubble` class (0.2.1 still does).
+const SURFACES = [
+  ['[data-message-bubble]', 'background: linear-gradient(155deg, #0572df, #0863cc); color: #fff; border: 1px solid rgb(255 255 255 / .28); border-radius: 20px; box-shadow: 0 5px 16px rgb(0 100 215 / .16), inset 0 1px 0 rgb(255 255 255 / .23);'],
+  ['[data-message-bubble] :is(a, code)', 'color: inherit;'],
+  ['[data-message-bubble] ::selection', 'background: rgb(255 255 255 / .28);'],
+];
+
 function resolveModuleClass(document, packageName, moduleName, localName) {
   const id = `@deepseek-ai/dsh-client-${packageName}/${moduleName}.module.css`;
   const style = [...document.querySelectorAll('style[data-plugin-css]')].find(tag => tag.dataset.pluginCss === id);
   if (!style) return null;
   const escaped = localName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return style.textContent.match(new RegExp(`\\.([\\w-]+_${escaped})(?![\\w-])`))?.[1] ?? null;
+}
+
+function buildSurfaceCss() {
+  return SURFACES.map(([selector, declarations]) => `${SCOPE}[data-dsh-liquid-glass] ${selector} { ${declarations} }`).join('\n');
 }
 
 function buildAdapterCss(document) {
@@ -134,6 +148,7 @@ function buildAdapterCss(document) {
       rules.push(`@media (forced-colors: active) { ${selectors} { background: Canvas; color: CanvasText; border-color: CanvasText; } }`);
     }
   }
+  rules.push(buildSurfaceCss());
   const frame = resolveModuleClass(document, 'ui-layout', 'AppFrame', 'frame');
   const sidebar = resolveModuleClass(document, 'ui-layout', 'AppFrame', 'sidebarCol');
   if (frame && sidebar) {

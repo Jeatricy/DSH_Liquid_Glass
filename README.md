@@ -1,6 +1,6 @@
 # DSH Liquid Glass
 
-DeepSeek Harness 的全局玻璃主题，提供清透与磨砂面板、可调的流动背景，以及统一的左右侧栏圆角。当前版本 **1.5.2**，支持 **DSH 0.2.1-rc.5** 和 **0.2.2-rc.1**。使用官方 Cordis、Theme 和 UI 槽位接口。
+DeepSeek Harness 的全局玻璃主题，提供清透与磨砂面板、可调的流动背景，以及统一的左右侧栏圆角。当前版本 **1.6.0**，支持 **DSH 0.2.1-rc.5**、**0.2.2-rc.1** 和 **0.2.2-rc.3**。使用官方 Cordis、Theme 和 UI 槽位接口。
 
 ![界面预览](docs/images/preview.png)
 
@@ -8,6 +8,10 @@ DeepSeek Harness 的全局玻璃主题，提供清透与磨砂面板、可调的
 
 ## 本版调整
 
+- 适配 DSH 0.2.2-rc.3：`engines.dsh` 加入该版本。旧版本会因不满足依赖被 DSH 跳过整条插件记录，表现为主题完全不生效。
+- 用户消息不再依赖 `MessageItem.bubble` 这个会被重建的类名，改用官方 `UserMessageBubble` 基础组件透传的 `data-message-bubble` 属性；0.2.2-rc.1 起蓝色气泡也能正常着色。
+- 发送按钮底色改用主题 token，深色模式跟随强调色，不再固定为浅色模式的蓝。
+- 浏览器回归现在能读取压缩后的官方产物（模板字符串形式的样式表），并同时覆盖 0.2.1 与 0.2.2 两种气泡标记。
 - 主题和背景流动开关沿用 DSH 插件列表的原生开关组件。
 - 左下角外观入口改为水滴图标。
 
@@ -23,7 +27,7 @@ DeepSeek Harness 的全局玻璃主题，提供清透与磨砂面板、可调的
 3. 安装完成后点击「立即启用」。已安装旧版时，按插件管理器提示更新或先卸载旧版再安装新版本。
 4. 左下角水滴按钮和「设置 → 通用」都能调整外观。
 
-仓库包含已构建的客户端产物。也可以克隆仓库，按下文开发命令运行 `pnpm run pack`，再把生成的 `dist/dsh-liquid-glass-1.5.2.tgz` 的绝对路径填入安装框。
+仓库包含已构建的客户端产物。也可以克隆仓库，按下文开发命令运行 `pnpm run pack`，再把生成的 `dist/dsh-liquid-glass-1.6.0.tgz` 的绝对路径填入安装框。
 
 如果从命令行更新过 DSH 的 profile，插件页可能仍显示打开页面时的旧开关状态。点击插件页右上角的刷新即可重新读取；主题是否生效以页面外观和左下角「液态玻璃」面板为准。
 
@@ -43,7 +47,7 @@ DeepSeek Harness 的全局玻璃主题，提供清透与磨砂面板、可调的
 
 ## 窗口边界
 
-当前 Windows 10 / DSH 0.2.1-rc.5 的窗口外轮廓和右上三键由原生桌面壳管理，正式插件接口不能将其去掉或替换为 macOS 三色按钮。本版按用户要求移除了额外的整页内框，避免多层套框。
+当前 Windows 10 / DSH 0.2.2-rc.3 的窗口外轮廓和右上三键由原生桌面壳管理，正式插件接口不能将其去掉或替换为 macOS 三色按钮。本版按用户要求移除了额外的整页内框，避免多层套框。
 
 嵌入网页、PDF 页面、跨源 iframe 与原生系统菜单不属于主题 CSS 的控制范围。代码高亮、终端、差异增删和业务状态色沿用 DSH 的语义颜色。更新 DSH 后需要重新检查兼容性。
 
@@ -71,7 +75,9 @@ pnpm run pack
 
 ```powershell
 # Windows 标准安装路径会自动识别；非标准路径加 --archive 指定 app.asar。
-python scripts/inspect-dsh.py .cache/dsh
+# 目录名建议带上 DSH 版本，便于对不同版本分别回归。
+python scripts/inspect-dsh.py .cache/dsh-0.2.2-rc.3
+$env:DSH_SDK_REFERENCE_DIR = ".cache/dsh-0.2.2-rc.3/node_modules/@deepseek-ai"
 pnpm run test:browser
 ```
 

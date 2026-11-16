@@ -4,7 +4,7 @@ import { setImmediate as nextTurn } from 'node:timers/promises';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import * as React from 'react';
-import { buildAdapterCss, resolveModuleClass } from '../src/adapters.js';
+import { buildAdapterCss, buildSurfaceCss, resolveModuleClass } from '../src/adapters.js';
 import { createClientPlugin } from '../src/client.js';
 import { createPreferenceStore, DEFAULTS, PLUGIN_ID, STORAGE_KEY } from '../src/preferences.js';
 import { mountTheme } from '../src/runtime.js';
@@ -497,7 +497,7 @@ test('module resolution uses the official package and complete local name, witho
 test('adapters only target resolved components while the plugin body gate is enabled', t => {
   const window = page(t);
   const { document } = window;
-  assert.equal(buildAdapterCss(document), '');
+  assert.equal(buildAdapterCss(document), buildSurfaceCss(), 'only hash-free semantic hooks exist before official CSS arrives');
   document.head.appendChild(officialStyle(document, 'ui-layout', 'AppFrame', '.layout_H71_frame { background: white; }'));
   document.head.appendChild(officialStyle(document, 'ui-chat', 'MessageItem', '.chat_N52_bubble { background: gray; }'));
   const frame = document.createElement('div');
@@ -546,7 +546,7 @@ test('late official styles and replacements resolve their current hashes and rem
   const { document } = window;
   runtime(t, window);
   const adapter = adapterStyle(document);
-  assert.equal(adapter.textContent, '');
+  assert.equal(adapter.textContent, buildSurfaceCss());
   const first = officialStyle(document, 'ui-layout', 'AppFrame', '.late_a1_frame { background: white; }');
   document.head.appendChild(first);
   await nextTurn();
@@ -558,7 +558,7 @@ test('late official styles and replacements resolve their current hashes and rem
   assert.doesNotMatch(adapter.textContent, /late_a1_frame/);
   second.remove();
   await nextTurn();
-  assert.equal(adapter.textContent, '');
+  assert.equal(adapter.textContent, buildSurfaceCss(), 'removing official CSS must drop only the hash-derived rules');
 });
 
 test('an official style populated after insertion gets an adapter once its CSS arrives', async t => {
@@ -568,7 +568,7 @@ test('an official style populated after insertion gets an adapter once its CSS a
   const style = officialStyle(document, 'ui-sidebar', 'SidebarRoot', '');
   document.head.appendChild(style);
   await nextTurn();
-  assert.equal(adapterStyle(document).textContent, '');
+  assert.equal(adapterStyle(document).textContent, buildSurfaceCss());
   style.textContent = '.loaded_later_72_root { background: white; }';
   await nextTurn();
   assert.match(adapterStyle(document).textContent, /\.loaded_later_72_root(?:\s|,|\{)/);
@@ -625,7 +625,7 @@ test('queued adapter work cannot revive styles after unmount', async t => {
   assert.equal(pending.length, 1, 'the late style should schedule an adapter refresh');
   unmount();
   for (const callback of pending) callback();
-  assert.equal(adapter.textContent, '', 'even the detached style must not be rewritten after disposal');
+  assert.equal(adapter.textContent, buildSurfaceCss(), 'even the detached style must not be rewritten after disposal');
   assert.equal(adapter.isConnected, false);
   assert.equal(ownedStyles(window.document).length, 0);
   assertNoAppearance(window.document.body);
