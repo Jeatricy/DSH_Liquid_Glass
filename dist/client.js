@@ -1,4 +1,4 @@
-/* dsh-liquid-glass 1.6.0 | MIT | uses DSH shared React and UI primitives */
+/* dsh-liquid-glass 1.6.1 | MIT | uses DSH shared React and UI primitives */
 window.__ModuleLoader__.load({
   id: 'dsh-liquid-glass',
   factory(require) {
